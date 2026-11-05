@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Swing Desk (paper mode)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EDF0F3; --surface:#FFFFFF; --ink:#16212C; --muted:#5B6877; --line:#D5DBE2;
+  --accent:#2B4BD8; --accent-ink:#FFFFFF; --up:#0E7A4B; --down:#C23A2B; --warn-bg:#FFF3D6; --warn-ink:#6B4A00;
+  --sans:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --serif:"Newsreader",Georgia,serif;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#10161D;--surface:#18212B;--ink:#E6ECF2;--muted:#93A1B1;--line:#2A3644;--accent:#7C95FF;--accent-ink:#0B1220;--up:#4CC38A;--down:#FF7B6B;--warn-bg:#3A2F10;--warn-ink:#F3D58A;color-scheme:dark}
+}
+:root[data-theme="dark"]{--bg:#10161D;--surface:#18212B;--ink:#E6ECF2;--muted:#93A1B1;--line:#2A3644;--accent:#7C95FF;--accent-ink:#0B1220;--up:#4CC38A;--down:#FF7B6B;--warn-bg:#3A2F10;--warn-ink:#F3D58A;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
+main{max-width:1080px;margin:0 auto;padding:20px 16px 60px}
+h1{font:600 28px/1.15 var(--serif);margin:0}
+h2{font:600 20px/1.2 var(--serif);margin:0 0 4px}
+.sub{color:var(--muted);margin:2px 0 0}
+header{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end;margin-bottom:14px}
+.banner{background:var(--warn-bg);color:var(--warn-ink);border-radius:8px;padding:12px 14px;margin-bottom:22px;font-size:14px}
+section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:18px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:760px}
+th{text-align:left;font-weight:500;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.sym{font-weight:600}
+.up{color:var(--up)} .down{color:var(--down)}
+button{font:500 14px var(--sans);border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:7px 12px;border-radius:6px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input{font:14px var(--sans);width:100px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid var(--line)}
+.tag.exit{color:var(--down);border-color:var(--down)} .tag.book{color:var(--up);border-color:var(--up)} .tag.hold{color:var(--muted)}
+.kpis{display:flex;flex-wrap:wrap;gap:28px;margin:6px 0 14px}
+.kpi b{display:block;font:600 22px var(--serif)} .kpi span{color:var(--muted);font-size:13px}
+.empty{color:var(--muted);padding:14px 0}
+svg{width:100%;height:auto;display:block}
+.note{color:var(--muted);font-size:13px;margin-top:10px}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div>
+    <h1>Swing Desk</h1>
+    <p class="sub">Cash-market long-only calls for a ₹5,50,000 paper account. Data as of <span id="asof"></span> close<span id="live"></span>. <a href="report_latest.xlsx">Excel</a> · <a href="report_latest.pdf">PDF</a></p>
+  </div>
+  <div class="kpis" style="margin:0">
+    <div class="kpi"><b id="k-cands">0</b><span>stocks flagged today</span></div>
+    <div class="kpi"><b id="k-open">0</b><span>paper positions open</span></div>
+  </div>
+</header>
+
+<div class="banner"><strong>Paper-trading only.</strong> This rule set has not passed out-of-sample testing: on 2024-26 data it roughly broke even before real-world frictions (see Backtest below). Do not use these calls with real money. Use them to learn how the system behaves over 1-2 months.</div>
+
+<section id="calls">
+  <h2>Calls for the next session</h2>
+  <p class="sub">Strategy: sharp 3-day drop (8-25%), volume above 2× average, delivery above 40%. The paper book buys at the next open if it is inside the entry zone. Size is set by a 1.5% account risk per trade, a 6% open-risk cap and per-stock caps.</p>
+  <div class="scroll"><table id="callsTable"></table></div>
+  <p class="note">Exit rules: stop loss at 3× ATR below entry, target at 3× the risk, or sell at the close on day 15, whichever comes first. “Take” is the system’s sizing verdict given your cash and open risk.</p>
+</section>
+
+<section id="pos">
+  <h2>Paper positions</h2>
+  <p class="sub">Opened and closed automatically by the paper book using the same rules as the backtest. Prices refresh every 15 minutes in market hours.</p>
+  <div class="scroll"><table id="posTable"></table></div>
+</section>
+
+<section id="pnl">
+  <h2>P&amp;L report</h2>
+  <div class="kpis" id="pnlK"></div>
+  <div class="scroll"><table id="histTable"></table></div>
+</section>
+
+<section id="bt">
+  <h2>Backtest: why this is paper-only</h2>
+  <p class="sub">Simulated account on this exact rule set at 1.5% risk per trade, with costs and slippage. Left of the line was used to design the rules; right of the line was held out.</p>
+  <div id="chart"></div>
+  <div class="kpis" id="btK"></div>
+  <p class="note">Trend-following, pullback and monthly rotation variants were also tested and lost money or suffered 40%+ drawdowns on the held-out period. Past results do not predict future returns.</p>
+</section>
+</main>
+
+<script>
+const inr = n => "₹" + Math.round(n).toLocaleString("en-IN");
+const pct = n => (n>=0?"+":"") + n.toFixed(1) + "%";
+const loadJ = u => fetch(u+"?t="+Date.now()).then(r=>r.ok?r.json():null).catch(()=>null);
+Promise.all([loadJ("state.json"), loadJ("backtest.json")]).then(([S,B])=>{
+  if(!S){ document.querySelector("main").insertAdjacentHTML("afterbegin",'<p class="banner">No data yet. Run the “Daily run” workflow once from the Actions tab.</p>'); return; }
+  document.getElementById("asof").textContent = S.asof||"-";
+  if(S.live_time) document.getElementById("live").textContent = ", live prices " + S.live_time + " IST";
+  document.getElementById("k-cands").textContent = S.calls.length;
+  document.getElementById("k-open").textContent = S.positions.length;
+  // calls
+  const ct = document.getElementById("callsTable");
+  if(!S.calls.length) ct.outerHTML='<p class="empty">No stock passed the rules at the last close. Standing aside is a valid call.</p>';
+  else { let h='<tr><th>Stock</th><th>Liquidity tier</th><th class="num">3-day move</th><th class="num">Entry zone</th><th class="num">Stop</th><th class="num">Target</th><th class="num">Qty</th><th class="num">Amount</th><th class="num">Risk</th><th>Verdict</th></tr>';
+    S.calls.forEach(c=>{ h+=`<tr><td class="sym">${c.sym}</td><td>${c.tier}</td><td class="num down">${c.drop3d}%</td><td class="num">${c.entry_lo.toLocaleString("en-IN")} to ${c.entry_hi.toLocaleString("en-IN")}</td><td class="num">${c.stop.toLocaleString("en-IN")} <span class="down">(-${c.risk_pct}%)</span></td><td class="num">${c.target.toLocaleString("en-IN")}</td><td class="num">${c.qty}</td><td class="num">${inr(c.size)}</td><td class="num">${inr(c.risk_amt)}</td><td><span class="tag ${c.take?'book':'hold'}">${c.take?'Take':'Skip: limits'}</span></td></tr>`;});
+    ct.innerHTML=h; }
+  // positions
+  const pt = document.getElementById("posTable");
+  if(!S.positions.length) pt.outerHTML='<p class="empty">No open paper positions.</p>';
+  else { let h='<tr><th>Stock</th><th>Opened</th><th class="num">Entry</th><th class="num">Qty</th><th class="num">Stop</th><th class="num">Target</th><th class="num">Latest</th><th class="num">P&amp;L</th><th>Signal</th></tr>';
+    S.positions.forEach(p=>{ const pnl=(p.last-p.entry)*p.qty; let sg=['hold','Hold, day '+p.days];
+      if(p.last<=p.stop) sg=['exit','Exit: stop hit']; else if(p.last>=p.target) sg=['book','Book profit: target hit']; else if(p.days>=15) sg=['exit','Exit: 15-day limit'];
+      h+=`<tr><td class="sym">${p.sym}</td><td>${p.open_date}</td><td class="num">${p.entry}</td><td class="num">${p.qty}</td><td class="num">${p.stop}</td><td class="num">${p.target}</td><td class="num">${p.last}</td><td class="num ${pnl>=0?'up':'down'}">${inr(pnl)} (${pct((p.last/p.entry-1)*100)})</td><td><span class="tag ${sg[0]}">${sg[1]}</span></td></tr>`;});
+    pt.innerHTML=h; }
+  // pnl
+  const real=S.history.reduce((a,h)=>a+h.pnl,0), un=S.positions.reduce((a,p)=>a+(p.last-p.entry)*p.qty,0), w=S.history.filter(h=>h.pnl>0).length;
+  document.getElementById("pnlK").innerHTML=`<div class="kpi"><b class="${real>=0?'up':'down'}">${inr(real)}</b><span>realized</span></div><div class="kpi"><b class="${un>=0?'up':'down'}">${inr(un)}</b><span>open (unrealized)</span></div><div class="kpi"><b>${inr(S.capital+real+un)}</b><span>paper account value</span></div><div class="kpi"><b>${S.history.length?Math.round(w/S.history.length*100)+'%':'-'}</b><span>win rate (${S.history.length} closed)</span></div>`;
+  const ht=document.getElementById("histTable");
+  if(!S.history.length) ht.outerHTML='<p class="empty">Closed trades appear here.</p>';
+  else { let h='<tr><th>Stock</th><th>Opened</th><th>Closed</th><th class="num">Entry</th><th class="num">Exit</th><th class="num">Qty</th><th class="num">P&amp;L</th><th>Reason</th></tr>';
+    S.history.slice().reverse().forEach(x=>{h+=`<tr><td class="sym">${x.sym}</td><td>${x.opened}</td><td>${x.closed}</td><td class="num">${x.entry}</td><td class="num">${x.exit}</td><td class="num">${x.qty}</td><td class="num ${x.pnl>=0?'up':'down'}">${inr(x.pnl)}</td><td>${x.why}</td></tr>`;}); ht.innerHTML=h; }
+  if(B) chart(B);
+});
+function chart(DATA){
+  const pts=DATA.curve, W=900,H=300,pad={l:56,r:12,t:12,b:26}; const ys=pts.map(p=>p[1]), mn=Math.min(...ys)*.97, mx=Math.max(...ys)*1.03;
+  const x=i=>pad.l+i*(W-pad.l-pad.r)/(pts.length-1), y=v=>pad.t+(1-(v-mn)/(mx-mn))*(H-pad.t-pad.b); const split=pts.findIndex(p=>p[0]>="2024-01-01");
+  const d=pts.map((p,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(p[1]).toFixed(1)).join(' ');
+  let grid=''; for(let k=0;k<5;k++){const v=mn+(mx-mn)*k/4; grid+=`<line x1="${pad.l}" x2="${W-pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pad.l-6}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${(v/1e5).toFixed(1)}L</text>`;}
+  document.getElementById("chart").innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Simulated account value">${grid}<rect x="${x(split)}" y="${pad.t}" width="${W-pad.r-x(split)}" height="${H-pad.t-pad.b}" fill="var(--accent)" opacity=".07"/><line x1="${x(split)}" x2="${x(split)}" y1="${pad.t}" y2="${H-pad.b}" stroke="var(--accent)" stroke-dasharray="4 3"/><text x="${x(split)+6}" y="${pad.t+14}" font-size="12" fill="var(--accent)">held-out period</text><path d="${d}" fill="none" stroke="var(--ink)" stroke-width="2"/></svg>`;
+  const s=DATA.stats; document.getElementById("btK").innerHTML=`<div class="kpi"><b class="${s.train.ret>=0?'up':'down'}">${pct(s.train.ret)}</b><span>design period 2019-23 (worst drawdown ${s.train.dd}%)</span></div><div class="kpi"><b class="${s.test.ret>=0?'up':'down'}">${pct(s.test.ret)}</b><span>held-out 2024-26 (worst drawdown ${s.test.dd}%)</span></div>`;
+}
+</script>
+</body>
+</html>

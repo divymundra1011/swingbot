@@ -1,0 +1,8 @@
+pandas
+numpy
+requests
+pyarrow
+openpyxl
+reportlab
+yfinance
+pytz
