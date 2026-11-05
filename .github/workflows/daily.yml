@@ -1,0 +1,30 @@
+name: Daily run
+on:
+  schedule:
+    - cron: "30 12 * * 1-5"     # 18:00 IST, after NSE publishes the day's file
+  workflow_dispatch: {}
+concurrency: { group: swing, cancel-in-progress: false }
+permissions: { contents: write }
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - uses: actions/cache@v4
+        with: { path: raw, key: raw-${{ github.run_id }}, restore-keys: raw- }
+      - run: pip install -r requirements.txt
+      - run: python daily.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+      - name: Save results
+        run: |
+          git config user.name "swingbot"; git config user.email "swingbot@users.noreply.github.com"
+          git add docs
+          git diff --cached --quiet || (git commit -m "daily update" && git pull --rebase && git push)
